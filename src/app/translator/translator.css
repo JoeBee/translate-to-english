@@ -31,8 +31,9 @@
   top: 0;
   right: 0;
   background: none;
-  border: 2px solid #3b82f6;
-  color: #3b82f6;
+  /* Light blue when not focused */
+  border: 2px solid #93c5fd;
+  color: #60a5fa;
   font-size: 20px;
   width: 32px;
   height: 32px;
@@ -44,12 +45,27 @@
   padding: 0;
   transition: all 0.2s;
   flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .info-icon:hover {
   background: #3b82f6;
+  border-color: #3b82f6;
   color: white;
   transform: scale(1.1);
+}
+
+.info-icon:focus {
+  outline: none;
+}
+
+.info-icon:focus-visible {
+  /* Rounded focus ring (avoids the default square blue outline) */
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35);
+  border-color: #3b82f6;
+  color: #3b82f6;
 }
 
 .subtitle {

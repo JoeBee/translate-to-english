@@ -90,7 +90,7 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     // Subscribe to debounced text changes for translation
     this.subscriptions.add(
       this.textChangeSubject.pipe(
-        debounceTime(300), // Wait 300ms after user stops speaking before translating
+        debounceTime(900), // Less chatty (esp. for MyMemory free tier)
         distinctUntilChanged() // Only translate if text actually changed
       ).subscribe((text: string) => {
         // Debounced translation for interim speech results (and manual typing)
@@ -122,8 +122,9 @@ export class TranslatorComponent implements OnInit, OnDestroy {
           this.interimOriginal.set('');
           this.interimTranslated.set('');
 
-          // Break into sentence-like chunks and prepend newest-first
-          const pieces = this.flattenChunks(this.splitIntoSentences(finalText), 450);
+          // Break into sentence-like chunks and prepend newest-first.
+          // Pack multiple sentences into <=450 char chunks to reduce API calls.
+          const pieces = this.packIntoChunks(this.splitIntoSentences(finalText), 450);
           for (const piece of pieces) {
             this.prependSegment(piece);
           }
@@ -132,12 +133,10 @@ export class TranslatorComponent implements OnInit, OnDestroy {
           // Interim result at the very top (not committed)
           const interim = (result.text || '').trim();
           this.interimOriginal.set(interim);
+          // Do NOT translate interim speech results anymore (too chatty for free tiers).
+          // We only translate finalized chunks.
+          this.interimTranslated.set('');
           this.rebuildDisplayStrings();
-
-          // Queue for debounced translation (limit length to avoid query errors)
-          if (interim) {
-            this.textChangeSubject.next(this.truncateForQuery(interim, 450));
-          }
         }
       })
     );
@@ -347,7 +346,8 @@ export class TranslatorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Manual typing: translate into the main translation box (single view)
+    // Only translate interim text in MANUAL typing mode.
+    // Speech mode only translates finalized chunks (less chatty / fewer API calls).
     if (this.manualMode()) {
       const sourceLang = this.selectedLanguage();
       if (!sourceLang) {
@@ -358,33 +358,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
       this.translateTextOnce(this.truncateForQuery(trimmed, 450), sourceLang);
       return;
     }
-
-    const sourceLang = this.selectedLanguage();
-    if (!sourceLang) return;
-
-    const safe = this.truncateForQuery(trimmed, 450);
-    this.interimTranslated.set('⏳ Translating…');
-    this.rebuildDisplayStrings();
-    this.pendingTranslations += 1;
-    this.isTranslating.set(true);
-    this.translationService.translate(safe, 'en', sourceLang).subscribe({
-      next: (result) => {
-        if (result?.error) {
-          this.interimTranslated.set('');
-        } else {
-          this.interimTranslated.set(result.translatedText || '');
-        }
-        this.pendingTranslations = Math.max(0, this.pendingTranslations - 1);
-        this.isTranslating.set(this.pendingTranslations > 0);
-        this.rebuildDisplayStrings();
-      },
-      error: () => {
-        this.interimTranslated.set('');
-        this.pendingTranslations = Math.max(0, this.pendingTranslations - 1);
-        this.isTranslating.set(this.pendingTranslations > 0);
-        this.rebuildDisplayStrings();
-      }
-    });
   }
 
   speakTranslation(text: string): void {
@@ -656,6 +629,38 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     for (const p of parts) {
       out.push(...this.chunkText(p, maxChars));
     }
+    return out;
+  }
+
+  private packIntoChunks(parts: string[], maxChars: number): string[] {
+    const out: string[] = [];
+    let buf = '';
+
+    const flush = () => {
+      const t = buf.trim();
+      if (t) out.push(...this.chunkText(t, maxChars));
+      buf = '';
+    };
+
+    for (const raw of parts) {
+      const p = (raw || '').trim();
+      if (!p) continue;
+
+      if (!buf) {
+        buf = p;
+        continue;
+      }
+
+      // Try adding with a space
+      const candidate = `${buf} ${p}`.trim();
+      if (candidate.length <= maxChars) {
+        buf = candidate;
+      } else {
+        flush();
+        buf = p;
+      }
+    }
+    flush();
     return out;
   }
 
