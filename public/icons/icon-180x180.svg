@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="180" height="180" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad180" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" fill="url(#grad180)" rx="27"/>
+  <!-- Language bubbles -->
+  <circle cx="50.4" cy="81" r="21.599999999999998" fill="white" opacity="0.95"/>
+  <circle cx="129.6" cy="81" r="21.599999999999998" fill="white" opacity="0.95"/>
+  <!-- Arrow pointing right -->
+  <path d="M 75.6 99 L 104.4 99 M 99 93.6 L 104.4 99 L 99 104.4" 
+        stroke="white" stroke-width="5.3999999999999995" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Text "EN" at bottom -->
+  <text x="90" y="138.6" font-family="Arial, sans-serif" font-size="32.4" fill="white" text-anchor="middle" font-weight="bold">EN</text>
+</svg>
