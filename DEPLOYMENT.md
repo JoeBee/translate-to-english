@@ -18,7 +18,7 @@ The errors you're seeing are because **Firebase Functions are not deployed yet**
 ### 1. Install Function Dependencies
 
 ```bash
-cd C:\JB\translate-to-english\functions
+cd C:\JB\GitHub\translate-to-english\functions
 npm install
 ```
 
@@ -51,7 +51,7 @@ gcloud auth application-default login
 
 From the project root:
 ```bash
-cd C:\JB\translate-to-english
+cd C:\JB\GitHub\translate-to-english
 firebase deploy --only functions
 ```
 
@@ -107,4 +107,3 @@ Once functions are deployed:
 3. ✅ Translation will work (API calls succeed)
 
 The app will automatically use the deployed functions - no code changes needed!
-

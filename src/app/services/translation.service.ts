@@ -30,6 +30,15 @@ export interface DetectionResult {
 export class TranslationService {
   private functionsUrl: string;
   private translationCache: Map<string, string> = new Map();
+  private isEmulatorUrl(url: string): boolean {
+    try {
+      const u = new URL(url);
+      // Firebase functions emulator defaults to 5001 and uses /<project>/us-central1
+      return u.port === '5001' || u.pathname.includes('/us-central1');
+    } catch {
+      return url.includes(':5001') || url.includes('/us-central1');
+    }
+  }
 
   // Supported languages with their codes
   public readonly languages: Language[] = [
@@ -81,7 +90,25 @@ export class TranslationService {
   ) {
     // Use emulator in development if enabled, otherwise use production
     if (!environment.production && environment.useEmulator) {
-      this.functionsUrl = environment.functionsUrl; // Already set to emulator URL
+      // If the app is opened on another device (e.g. phone) while using the emulator,
+      // `localhost` will point at that device, not your dev machine. In that case,
+      // rewrite the emulator host to match the page host (typically your PC's LAN IP).
+      this.functionsUrl = environment.functionsUrl;
+      try {
+        const pageHost =
+          typeof window !== 'undefined' && window.location?.hostname
+            ? window.location.hostname
+            : '';
+        if (pageHost) {
+          const u = new URL(this.functionsUrl);
+          if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
+            u.hostname = pageHost;
+            this.functionsUrl = u.toString().replace(/\/$/, '');
+          }
+        }
+      } catch {
+        // Keep the configured URL if parsing fails
+      }
     } else {
       this.functionsUrl = 'https://us-central1-translate-to-english-80cad.cloudfunctions.net';
     }
@@ -112,7 +139,11 @@ export class TranslationService {
     }
 
     // Check if functions URL is configured
-    if (!this.functionsUrl || this.functionsUrl.includes('YOUR_') || (!this.functionsUrl.includes('cloudfunctions.net') && !this.functionsUrl.includes('localhost'))) {
+    if (
+      !this.functionsUrl ||
+      this.functionsUrl.includes('YOUR_') ||
+      (!this.functionsUrl.includes('cloudfunctions.net') && !this.isEmulatorUrl(this.functionsUrl) && !this.functionsUrl.includes('localhost'))
+    ) {
       console.warn('Firebase Functions URL not configured. Using fallback language detection.');
       // Simple fallback: try to detect based on common patterns
       const detected = this.simpleLanguageDetection(text);
@@ -350,10 +381,11 @@ export class TranslationService {
             sourceLang !== targetLanguage;
 
           if (mockFailed) {
-            // Only try fallback if not using localhost (emulator might not be running)
-            const isLocalhost = this.functionsUrl.includes('localhost');
+            // If we're using the emulator (even via LAN IP), prefer MyMemory fallback for mock misses.
+            // This keeps development usable on phones even when the emulator isn't reachable.
+            const isEmulator = this.isEmulatorUrl(this.functionsUrl) || this.functionsUrl.includes('localhost');
 
-            if (isLocalhost) {
+            if (isEmulator) {
               // Use free public API (MyMemory) as fallback for localhost development
               // This ensures translation works without emulator
               console.log('[TranslationService] Mock translation failed, using MyMemory API fallback');
@@ -447,7 +479,11 @@ export class TranslationService {
 
   private callRealTranslationAPI(text: string, targetLanguage: string, sourceLanguage: string | undefined, cacheKey: string): Observable<TranslationResult> {
     // Check if functions URL is configured
-    if (!this.functionsUrl || this.functionsUrl.includes('YOUR_') || (!this.functionsUrl.includes('cloudfunctions.net') && !this.functionsUrl.includes('localhost'))) {
+    if (
+      !this.functionsUrl ||
+      this.functionsUrl.includes('YOUR_') ||
+      (!this.functionsUrl.includes('cloudfunctions.net') && !this.isEmulatorUrl(this.functionsUrl) && !this.functionsUrl.includes('localhost'))
+    ) {
       console.warn('Firebase Functions URL not configured. Cannot translate.');
       return of({
         translatedText: text,

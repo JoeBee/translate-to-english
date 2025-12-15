@@ -26,18 +26,5 @@
       }
     }
   ],
-  "dataGroups": [
-    {
-      "name": "translation-api",
-      "urls": [
-        "https://us-central1-translate-to-english-80cad.cloudfunctions.net/**"
-      ],
-      "cacheConfig": {
-        "strategy": "networkFirst",
-        "maxAge": "1h",
-        "timeout": "10s"
-      }
-    }
-  ]
+  "dataGroups": []
 }
-

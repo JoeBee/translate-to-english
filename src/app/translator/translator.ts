@@ -26,6 +26,7 @@ export class TranslatorComponent implements OnInit, OnDestroy {
   timeRemaining = signal<number>(120); // Countdown timer in seconds
   enableTextToSpeech = signal<boolean>(false); // Default to disabled
   showInfoModal = signal<boolean>(false); // Info modal visibility
+  currentUrl = signal<string>('');
 
   @ViewChild('originalBox') private originalBox?: ElementRef<HTMLTextAreaElement>;
   @ViewChild('translatedBox') private translatedBox?: ElementRef<HTMLTextAreaElement>;
@@ -34,6 +35,7 @@ export class TranslatorComponent implements OnInit, OnDestroy {
   private lastTranslatedText = '';
   private textChangeSubject = new Subject<string>();
   private countdownInterval: any = null;
+  private scrollScheduleTimer: any = null;
   private pendingTranslations = 0;
   private nextSegmentId = 1;
 
@@ -41,6 +43,13 @@ export class TranslatorComponent implements OnInit, OnDestroy {
   private interimOriginal = signal<string>('');
   private interimTranslated = signal<string>('');
   private manualMode = signal<boolean>(false);
+
+  // Speech-mode translation batching (to reduce API usage):
+  // - Only translate completed sentences (ending in . ! ? etc), OR
+  // - Translate whatever we have after a short pause in speaking.
+  private speechBuffer = '';
+  private speechPauseTimer: any = null;
+  private readonly speechPauseMs = 1300;
 
   // Languages for dropdown - initialize in ngOnInit
   languages: Language[] = [];
@@ -63,6 +72,12 @@ export class TranslatorComponent implements OnInit, OnDestroy {
   // ...
 
   ngOnInit(): void {
+    // Expose the current URL in the UI (helpful when the browser chrome hides it).
+    try {
+      this.currentUrl.set(typeof window !== 'undefined' ? window.location.href : '');
+    } catch {
+      this.currentUrl.set('');
+    }
     // Initialize languages
     this.languages = this.translationService.languages;
 
@@ -109,30 +124,28 @@ export class TranslatorComponent implements OnInit, OnDestroy {
           this.segments.set([]);
           this.interimOriginal.set('');
           this.interimTranslated.set('');
+          this.speechBuffer = '';
+          this.clearSpeechPauseTimer();
         }
 
         // Reset the *UI* 120s timer whenever we detect speech
         this.resetCountdownToFull();
 
+        // Any transcript activity means "not a break" yet.
+        this.resetSpeechPauseTimer();
+
         if (result.isFinal) {
           const finalText = (result.text || '').trim();
           if (!finalText) return;
 
-          // Clear interim once we get a final
-          this.interimOriginal.set('');
-          this.interimTranslated.set('');
-
-          // Break into sentence-like chunks and prepend newest-first.
-          // Pack multiple sentences into <=450 char chunks to reduce API calls.
-          const pieces = this.packIntoChunks(this.splitIntoSentences(finalText), 450);
-          for (const piece of pieces) {
-            this.prependSegment(piece);
-          }
-          this.rebuildDisplayStrings();
+          // Add final text into our buffer. We'll only translate completed sentences,
+          // and flush the rest when there's a pause in speaking.
+          this.speechBuffer = this.joinWithSpace(this.speechBuffer, finalText);
+          this.flushSpeechBuffer({ force: false });
         } else {
-          // Interim result at the very top (not committed)
+          // Interim result (not committed). Show buffer + interim at the bottom.
           const interim = (result.text || '').trim();
-          this.interimOriginal.set(interim);
+          this.interimOriginal.set(this.joinWithSpace(this.speechBuffer, interim));
           // Do NOT translate interim speech results anymore (too chatty for free tiers).
           // We only translate finalized chunks.
           this.interimTranslated.set('');
@@ -153,6 +166,9 @@ export class TranslatorComponent implements OnInit, OnDestroy {
           this.startCountdownTimer();
         } else if (!listening && wasListening) {
           console.log('[Translator] Stopping countdown timer');
+          // Treat "stop listening" as a break in talking: flush any buffered text.
+          this.clearSpeechPauseTimer();
+          this.flushSpeechBuffer({ force: true });
           this.stopCountdownTimer();
         }
       })
@@ -170,15 +186,13 @@ export class TranslatorComponent implements OnInit, OnDestroy {
       this.errorMessage.set('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
     }
 
-    // Keep the newest speech/translation visible:
-    // - For speech mode: scroll both boxes to the top when content changes.
-    // - For manual typing: scroll only the translation box (don’t fight user typing/caret).
+    // Keep the newest translation visible (and avoid fighting typing).
     effect(() => {
       // Depend on these signals
       this.originalText();
       this.translatedText();
-      const isManual = this.manualMode();
-      queueMicrotask(() => this.scrollOutputsToTop(isManual));
+      // Schedule after DOM updates/layout so scroll isn't lost.
+      this.scheduleAutoScrollToLatest();
     });
   }
 
@@ -187,6 +201,8 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     this.speechRecognition.stopListening();
     this.textToSpeech.stop();
     this.stopCountdownTimer();
+    this.clearSpeechPauseTimer();
+    this.clearScrollScheduleTimer();
   }
 
   private async autoStartListening(): Promise<void> {
@@ -406,7 +422,7 @@ export class TranslatorComponent implements OnInit, OnDestroy {
         message = 'Microphone not found or access denied. Please check your microphone settings.';
         break;
       case 'not-allowed':
-        message = 'Microphone permission denied. Click the lock icon in your browser\'s address bar and allow microphone access, then try again.';
+        message = 'Microphone permission denied. If you\'re using Cursor\'s embedded browser, microphone access may be blocked—open this site in Chrome/Edge. Otherwise, click the lock icon in your browser\'s address bar and allow microphone access, then reload.';
         break;
       case 'network':
         message = 'Network error. Please check your connection.';
@@ -424,6 +440,37 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     }
     this.errorMessage.set(message);
     this.isListening.set(false);
+  }
+
+  openCurrentUrlInNewTab(): void {
+    const url = this.currentUrl();
+    if (!url) return;
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // ignore
+    }
+  }
+
+  async copyCurrentUrl(): Promise<void> {
+    const url = this.currentUrl();
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      this.errorMessage.set('Link copied.');
+      setTimeout(() => {
+        // Don't clear a real error
+        if (this.errorMessage() === 'Link copied.') this.errorMessage.set('');
+      }, 1200);
+    } catch {
+      // Fallback for environments without clipboard permissions
+      try {
+        // eslint-disable-next-line no-alert
+        window.prompt('Copy this link:', url);
+      } catch {
+        // ignore
+      }
+    }
   }
 
   onTextToSpeechChange(enabled: boolean): void {
@@ -459,6 +506,87 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     this.interimOriginal.set('');
     this.interimTranslated.set('');
     this.manualMode.set(false);
+    this.speechBuffer = '';
+    this.clearSpeechPauseTimer();
+  }
+
+  private resetSpeechPauseTimer(): void {
+    this.clearSpeechPauseTimer();
+    this.speechPauseTimer = setTimeout(() => {
+      // A pause/break in talking: translate whatever remains in the buffer.
+      this.flushSpeechBuffer({ force: true });
+    }, this.speechPauseMs);
+  }
+
+  private clearSpeechPauseTimer(): void {
+    if (this.speechPauseTimer) {
+      clearTimeout(this.speechPauseTimer);
+      this.speechPauseTimer = null;
+    }
+  }
+
+  private flushSpeechBuffer(opts: { force: boolean }): void {
+    const input = (this.speechBuffer || '').trim();
+    if (!input) {
+      this.interimOriginal.set('');
+      this.interimTranslated.set('');
+      this.rebuildDisplayStrings();
+      return;
+    }
+
+    const extracted = this.extractCompletedSentences(input);
+    const completed = extracted.completed;
+    const remainder = (extracted.remainder || '').trim();
+
+    // If forced (pause), treat remainder as a chunk to translate too.
+    const toTranslate = opts.force ? [...completed, ...(remainder ? [remainder] : [])] : completed;
+
+    if (toTranslate.length > 0) {
+      // Pack sentences into <=450 char chunks to reduce API calls.
+      const pieces = this.packIntoChunks(toTranslate, 450);
+      for (const piece of pieces) {
+        this.appendSegment(piece);
+      }
+    }
+
+    // Keep only the unfinished tail (unless we forced a flush).
+    this.speechBuffer = opts.force ? '' : remainder;
+
+    // Show whatever is left as interim (untranslated).
+    this.interimOriginal.set(this.speechBuffer);
+    this.interimTranslated.set('');
+    this.rebuildDisplayStrings();
+  }
+
+  private extractCompletedSentences(text: string): { completed: string[]; remainder: string } {
+    const cleaned = (text || '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return { completed: [], remainder: '' };
+
+    const completed: string[] = [];
+    let current = '';
+
+    for (const ch of cleaned) {
+      current += ch;
+      if (this.isSentenceTerminator(ch)) {
+        const s = current.trim();
+        if (s) completed.push(s);
+        current = '';
+      }
+    }
+
+    return { completed, remainder: current.trim() };
+  }
+
+  private isSentenceTerminator(ch: string): boolean {
+    return ch === '.' || ch === '!' || ch === '?' || ch === '。' || ch === '！' || ch === '？';
+  }
+
+  private joinWithSpace(a: string, b: string): string {
+    const left = (a || '').trim();
+    const right = (b || '').trim();
+    if (!left) return right;
+    if (!right) return left;
+    return `${left} ${right}`;
   }
 
   private resetCountdownToFull(): void {
@@ -508,13 +636,13 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  private prependSegment(original: string): void {
+  private appendSegment(original: string): void {
     const sourceLang = this.selectedLanguage();
     const safeOriginal = this.truncateForQuery(original, 450);
     const id = this.nextSegmentId++;
 
-    // Prepend placeholder segment
-    const next = [{ id, original: safeOriginal, translated: '', translating: true }, ...this.segments()];
+    // Append placeholder segment
+    const next = [...this.segments(), { id, original: safeOriginal, translated: '', translating: true }];
     this.segments.set(next);
 
     if (!sourceLang) {
@@ -563,14 +691,12 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     }
 
     const originals: string[] = [];
+    originals.push(...this.segments().map(s => s.original));
     const interim = this.interimOriginal();
     if (interim) originals.push(interim);
-    originals.push(...this.segments().map(s => s.original));
-    this.originalText.set(originals.join('\n\n'));
+    this.originalText.set(originals.join('\n'));
 
     const translations: string[] = [];
-    const interimT = this.interimTranslated();
-    if (interimT) translations.push(interimT);
     translations.push(
       ...this.segments().map(s => {
         if (s.translating && (!s.translated || s.translated.trim().length === 0)) {
@@ -579,19 +705,38 @@ export class TranslatorComponent implements OnInit, OnDestroy {
         return s.translated ?? '';
       })
     );
-    this.translatedText.set(translations.join('\n\n'));
+    const interimT = this.interimTranslated();
+    if (interimT) translations.push(interimT);
+    this.translatedText.set(translations.join('\n'));
   }
 
-  private scrollOutputsToTop(isManual: boolean): void {
-    // Always keep the newest translation visible
-    const t = this.translatedBox?.nativeElement;
-    if (t) t.scrollTop = 0;
+  private scheduleAutoScrollToLatest(): void {
+    // Coalesce many updates into one scroll.
+    this.clearScrollScheduleTimer();
+    this.scrollScheduleTimer = setTimeout(() => {
+      this.scrollScheduleTimer = null;
+      // Double-rAF ensures layout has settled and textarea.value is applied.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => this.scrollOutputsToLatest());
+      });
+    }, 0);
+  }
 
-    // Only auto-scroll original box in speech mode (don’t disrupt typing)
-    if (!isManual) {
-      const o = this.originalBox?.nativeElement;
-      if (o) o.scrollTop = 0;
+  private clearScrollScheduleTimer(): void {
+    if (this.scrollScheduleTimer) {
+      clearTimeout(this.scrollScheduleTimer);
+      this.scrollScheduleTimer = null;
     }
+  }
+
+  private scrollOutputsToLatest(): void {
+    this.scrollTextareaToBottom(this.originalBox?.nativeElement);
+    this.scrollTextareaToBottom(this.translatedBox?.nativeElement);
+  }
+
+  private scrollTextareaToBottom(el?: HTMLTextAreaElement): void {
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
   }
 
   private splitIntoSentences(text: string): string[] {

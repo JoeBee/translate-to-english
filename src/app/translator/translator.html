@@ -1,201 +1,410 @@
 <div class="translator-container">
+
   <div class="translator-header">
+
     <div class="header-content">
+
       <h1>Translate to English</h1>
+
       <button class="info-icon" type="button" (click)="openInfoModal()" title="How to use this app"
         aria-label="How to use this app">
+
         ⓘ
+
       </button>
+
     </div>
+
     <p class="subtitle">Continuous real-time translation - select the source language and start listening</p>
+
+    @if (currentUrl()) {
+
+    <div class="url-hint">
+
+      <span class="url-label">URL:</span>
+
+      <a class="url-link" [href]="currentUrl()" target="_blank" rel="noopener noreferrer">{{ currentUrl() }}</a>
+
+      <button type="button" class="url-button" (click)="copyCurrentUrl()">Copy</button>
+
+      <button type="button" class="url-button" (click)="openCurrentUrlInNewTab()">Open</button>
+
+    </div>
+
+    }
+
   </div>
+
+
 
   <div class="language-selector">
+
     <div class="language-select-group">
+
       <div class="language-dropdown-container">
+
         <label for="language-select">Source Language:</label>
+
         <select id="language-select" [ngModel]="selectedLanguage()" (ngModelChange)="onLanguageChange($event)"
           class="language-dropdown">
+
           <option value="" disabled>Select a language...</option>
+
           @for (lang of languages; track lang.code) {
+
           <option [value]="lang.code">{{ lang.name }}</option>
+
           }
+
         </select>
+
       </div>
+
       <div class="tts-checkbox-container">
+
         <label class="tts-checkbox-label">
+
           <input type="checkbox" [checked]="enableTextToSpeech()"
             (change)="onTextToSpeechChange($any($event.target).checked)" class="tts-checkbox" />
+
           <span>Read aloud</span>
+
         </label>
+
       </div>
+
     </div>
+
   </div>
+
+
 
   <div class="controls">
+
     @if (isListening()) {
+
     <div class="listening-indicator">
+
       <span class="pulse-dot"></span>
+
       <span class="listening-text">Listening continuously...</span>
+
     </div>
+
     }
+
+
 
     @if (!isListening() && selectedLanguage()) {
+
     <button class="listen-button" (click)="toggleListening()">
+
       🎤 Start Listening
+
     </button>
+
     }
+
+
 
     @if (isListening()) {
+
     <button class="stop-button" (click)="toggleListening()">
+
       ⏹️ Stop Listening ({{ formattedTime }})
+
     </button>
+
     }
 
+
+
     @if (isSpeaking()) {
+
     <button class="speak-button" (click)="stopSpeaking()">
+
       ⏸️ Stop Speaking
+
     </button>
+
     }
+
   </div>
+
+
+
 
 
   @if (errorMessage()) {
+
   <div class="error-message"
     [class.firebase-error]="errorMessage().includes('Firebase') || errorMessage().includes('404') || errorMessage().includes('CORS')">
+
     {{ errorMessage() }}
+
     @if (errorMessage().includes('permission') || errorMessage().includes('Microphone')) {
+
     <div class="permission-help">
+
       <p><strong>How to enable microphone access:</strong></p>
+
       <ul>
+
         <li><strong>Chrome/Edge:</strong> Click the lock icon (🔒) or camera/microphone icon in the address bar, then
+
           select "Allow"</li>
+
         <li><strong>Firefox:</strong> Click the shield icon in the address bar, then "Permissions" → "Allow" for
+
           microphone</li>
+
         <li><strong>Safari:</strong> Safari → Settings → Websites → Microphone → Allow for this site</li>
+
       </ul>
+
       <p>After enabling, refresh the page and try again.</p>
+
     </div>
+
     }
+
     @if (errorMessage().includes('Firebase') || errorMessage().includes('404') || errorMessage().includes('CORS')) {
+
     <div class="deployment-help">
+
       <p><strong>To fix this issue:</strong></p>
+
       <ol>
-        <li>Navigate to the project directory: <code>cd C:\JB\translate-to-english</code></li>
+
+        <li>Navigate to the project directory: <code>cd C:\JB\GitHub\translate-to-english</code></li>
+
         <li>Install dependencies: <code>cd functions && npm install</code></li>
+
         <li>Build functions: <code>npm run build</code></li>
+
         <li>Deploy functions: <code>cd .. && firebase deploy --only functions</code></li>
+
         <li>Ensure Google Cloud Translation API is enabled in your Firebase project</li>
+
       </ol>
+
       <p><strong>Note:</strong> The app will use fallback language detection until Firebase Functions are deployed.</p>
+
     </div>
+
     }
+
   </div>
+
   }
 
+
+
   <div class="text-areas">
+
     <div class="text-area-container">
+
       <label>Original Text:</label>
+
       <textarea #originalBox class="text-area original" [value]="originalText()"
         (input)="onTextChange($any($event.target).value)"
         placeholder="Text will appear here as you speak, or type directly..." rows="4">
+
       </textarea>
+
       @if (originalText()) {
+
       <button class="clear-button" (click)="clearText()">Clear</button>
+
       }
+
     </div>
+
+
 
     <div class="text-area-container">
+
       <label>English Translation:</label>
+
       <div class="translation-wrapper">
+
         @if (isTranslating()) {
+
         <div class="loading">Translating...</div>
+
         }
+
         <textarea #translatedBox class="text-area translated" [value]="translatedText()" readonly
           placeholder="Translation will appear here..." rows="4">
+
         </textarea>
+
       </div>
+
     </div>
+
   </div>
+
+
 
   @if (!speechRecognition.isSupported()) {
+
   <div class="warning-box">
+
     <p><strong>Note:</strong> Speech recognition works best in Chrome or Edge browsers.</p>
+
     <p>You can still type text to translate.</p>
+
   </div>
+
   }
+
+
 
   <!-- Info Modal -->
+
   @if (showInfoModal()) {
+
   <div class="modal-overlay" (click)="closeInfoModal()">
+
     <div class="modal-content" (click)="$event.stopPropagation()">
+
       <div class="modal-header">
+
         <h2>How to Use This App</h2>
+
         <button class="modal-close" (click)="closeInfoModal()" title="Close">✕</button>
+
       </div>
+
       <div class="modal-body">
+
         <section class="info-section">
+
           <h3>📝 Quick Start</h3>
+
           <ol>
+
             <li><strong>Select your source language</strong> from the dropdown menu</li>
+
             <li>The app will <strong>automatically start listening</strong> for that language</li>
+
             <li><strong>Speak clearly</strong> into your microphone</li>
+
             <li>Watch the translation appear in real-time in the English Translation box</li>
+
             <li>The app will <strong>continuously listen for 120 seconds</strong> (see countdown timer)</li>
+
           </ol>
+
         </section>
 
+
+
         <section class="info-section">
+
           <h3>⚙️ Features</h3>
+
           <ul>
+
             <li><strong>Continuous Listening:</strong> The app listens continuously for 120 seconds without needing to
+
               restart</li>
+
             <li><strong>Real-time Translation:</strong> Translations appear as you speak</li>
+
             <li><strong>Text-to-Speech:</strong> Check "Read translation aloud" to hear the English translation</li>
+
             <li><strong>Manual Input:</strong> You can also type text directly into the Original Text box</li>
+
             <li><strong>Auto-save:</strong> Your language preference is saved automatically</li>
+
           </ul>
+
         </section>
 
+
+
         <section class="info-section">
+
           <h3>🎤 Microphone Troubleshooting</h3>
+
           <p>If nothing appears after speaking, check the following:</p>
+
           <ul>
+
             <li><strong>Browser:</strong> Use Chrome or Edge for best support</li>
+
             <li><strong>Microphone Permission:</strong> Click the lock/microphone icon in the address bar and allow
+
               microphone access</li>
+
             <li><strong>Correct Microphone:</strong> Check your system sound settings to ensure the right microphone is
+
               selected and not muted</li>
+
             <li><strong>Microphone Volume:</strong> Ensure your input volume is adequate in Windows sound settings</li>
+
             <li><strong>Speak Clearly:</strong> Try saying a simple phrase like "Hello, this is a test"</li>
+
             <li><strong>Language Match:</strong> Make sure you're speaking in the language you selected</li>
+
             <li><strong>Audio Feedback:</strong> If "Read translation aloud" is enabled, use headphones or lower speaker
+
               volume to prevent the microphone from picking up the English translation</li>
+
           </ul>
+
         </section>
 
+
+
         <section class="info-section">
+
           <h3>💡 Tips for Best Results</h3>
+
           <ul>
+
             <li>Speak at a normal pace with clear pronunciation</li>
+
             <li>Reduce background noise when possible</li>
+
             <li>If using text-to-speech, headphones work best to prevent audio feedback</li>
+
             <li>The app automatically restarts listening between phrases</li>
+
             <li>Click "Stop Listening" to end the session before the 120-second timeout</li>
+
             <li>Use the "Clear" button to start fresh with new text</li>
+
           </ul>
+
         </section>
 
+
+
         <section class="info-section">
+
           <h3>🌐 Supported Languages</h3>
+
           <p>The app supports dozens of languages including Spanish, French, German, Italian, Portuguese, Russian,
+
             Japanese, Korean, Chinese, Arabic, Hindi, Thai, Vietnamese, and many more.</p>
+
         </section>
+
       </div>
+
       <div class="modal-footer">
+
         <button class="modal-button" (click)="closeInfoModal()">Got it!</button>
+
       </div>
+
     </div>
+
   </div>
+
   }
+
 </div>
