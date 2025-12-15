@@ -18,12 +18,6 @@ export interface TranslationResult {
   error?: string;
 }
 
-export interface DetectionResult {
-  language: string;
-  confidence: number;
-  error?: string;
-}
-
 @Injectable({
   providedIn: 'root'
 })
@@ -116,110 +110,6 @@ export class TranslationService {
     this.loadCache();
   }
 
-  detectLanguage(text: string): Observable<DetectionResult> {
-    if (!text || text.trim().length === 0) {
-      return of({ language: 'en', confidence: 0 });
-    }
-
-    const cacheKey = `detect_${text}`;
-    const cached = this.translationCache.get(cacheKey);
-    if (cached) {
-      try {
-        const result = JSON.parse(cached);
-        return of(result);
-      } catch (e) {
-        // Invalid cache entry
-      }
-    }
-
-    // Use mock translation in development if enabled
-    if (!environment.production && environment.useMockTranslation) {
-      console.log('Using mock language detection (development mode)');
-      return this.mockDetectLanguage(text);
-    }
-
-    // Check if functions URL is configured
-    if (
-      !this.functionsUrl ||
-      this.functionsUrl.includes('YOUR_') ||
-      (!this.functionsUrl.includes('cloudfunctions.net') && !this.isEmulatorUrl(this.functionsUrl) && !this.functionsUrl.includes('localhost'))
-    ) {
-      console.warn('Firebase Functions URL not configured. Using fallback language detection.');
-      // Simple fallback: try to detect based on common patterns
-      const detected = this.simpleLanguageDetection(text);
-      return of({ language: detected, confidence: 0.5, error: 'Firebase Functions not configured' });
-    }
-
-    const url = `${this.functionsUrl}/detectLanguage?text=${encodeURIComponent(text)}`;
-
-    return this.http.get<DetectionResult>(url).pipe(
-      map(result => {
-        // Cache the result
-        this.translationCache.set(cacheKey, JSON.stringify(result));
-        this.saveCache();
-        return result;
-      }),
-      catchError(error => {
-        console.error('Error detecting language:', error);
-        console.error('Error details:', {
-          status: error?.status,
-          statusText: error?.statusText,
-          message: error?.message,
-          url: error?.url,
-          error: error?.error
-        });
-
-        // Handle status 0 (CORS/network) and 404 (not deployed) errors
-        const status = error?.status || 0;
-        let errorMsg = 'Unknown error';
-
-        if (status === 0) {
-          // CORS or network error
-          errorMsg = 'CORS/Network error: Firebase Functions may not be deployed or CORS is not configured. Status 0 typically means the request was blocked.';
-        } else if (status === 404) {
-          // Function not found
-          errorMsg = 'Function not found (404): Firebase Functions may not be deployed. Please deploy functions using: firebase deploy --only functions';
-        } else if (error?.error?.error) {
-          errorMsg = error.error.error;
-        } else if (error?.message) {
-          errorMsg = error.message;
-        } else if (error?.statusText) {
-          errorMsg = `${status}: ${error.statusText}`;
-        }
-
-        console.error('Language detection failed:', errorMsg);
-
-        // Try simple fallback detection
-        const detected = this.simpleLanguageDetection(text);
-        console.log('Using fallback detection:', detected);
-
-        // Return default on error - we'll proceed with auto-detect
-        return of({ language: detected, confidence: 0.3, error: errorMsg });
-      })
-    );
-  }
-
-  // Mock language detection for development (no API needed)
-  private mockDetectLanguage(text: string): Observable<DetectionResult> {
-    // Simulate API delay
-    return new Observable(observer => {
-      setTimeout(() => {
-        const detected = this.simpleLanguageDetection(text);
-        const result: DetectionResult = {
-          language: detected,
-          confidence: 0.85
-        };
-
-        // Cache the result
-        const cacheKey = `detect_${text}`;
-        this.translationCache.set(cacheKey, JSON.stringify(result));
-        this.saveCache();
-
-        observer.next(result);
-        observer.complete();
-      }, 200); // Simulate network delay
-    });
-  }
 
   // Mock translation for development (no API needed)
   private mockTranslate(text: string, targetLanguage: string = 'en', sourceLanguage?: string): Observable<TranslationResult> {

@@ -327,15 +327,5 @@ export class SpeechRecognitionService {
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
   }
 
-  getAvailableLanguages(): string[] {
-    // Common language codes supported by Web Speech API
-    return [
-      'en-US', 'en-GB', 'es-ES', 'es-MX', 'fr-FR', 'de-DE', 'it-IT',
-      'pt-BR', 'pt-PT', 'ru-RU', 'ja-JP', 'ko-KR', 'zh-CN', 'zh-TW',
-      'ar-SA', 'hi-IN', 'th-TH', 'vi-VN', 'id-ID', 'ms-MY',
-      // Southeast Asian languages - note Web Speech API has limited support
-      'lo-LA', 'km-KH', 'my-MM', 'tl-PH'
-    ];
-  }
 }
 

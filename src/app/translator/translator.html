@@ -15,23 +15,7 @@
 
     </div>
 
-    <p class="subtitle">Continuous real-time translation - select the source language and start listening</p>
-
-    @if (currentUrl()) {
-
-    <div class="url-hint">
-
-      <span class="url-label">URL:</span>
-
-      <a class="url-link" [href]="currentUrl()" target="_blank" rel="noopener noreferrer">{{ currentUrl() }}</a>
-
-      <button type="button" class="url-button" (click)="copyCurrentUrl()">Copy</button>
-
-      <button type="button" class="url-button" (click)="openCurrentUrlInNewTab()">Open</button>
-
-    </div>
-
-    }
+    <p class="subtitle">Continuous speech translation - select the source language and start listening</p>
 
   </div>
 
@@ -172,23 +156,22 @@
 
     <div class="deployment-help">
 
-      <p><strong>To fix this issue:</strong></p>
+      <p><strong>How to fix this:</strong></p>
 
-      <ol>
-
-        <li>Navigate to the project directory: <code>cd C:\JB\GitHub\translate-to-english</code></li>
-
-        <li>Install dependencies: <code>cd functions && npm install</code></li>
-
-        <li>Build functions: <code>npm run build</code></li>
-
-        <li>Deploy functions: <code>cd .. && firebase deploy --only functions</code></li>
-
-        <li>Ensure Google Cloud Translation API is enabled in your Firebase project</li>
-
-      </ol>
-
-      <p><strong>Note:</strong> The app will use fallback language detection until Firebase Functions are deployed.</p>
+      <ul>
+        <li><strong>Quick local dev:</strong> enable mock mode in <code>src/environments/environment.ts</code>:
+          <code>useMockTranslation: true</code>
+        </li>
+        <li><strong>Use emulators:</strong> start Functions emulator:
+          <code>firebase emulators:start --only functions</code>
+        </li>
+        <li><strong>Deploy Functions:</strong> from repo root run:
+          <code>cd functions && npm install && npm run build</code>, then
+          <code>cd .. && firebase deploy --only functions</code>
+        </li>
+        <li><strong>Enable API:</strong> ensure Cloud Translation API is enabled for your Google Cloud/Firebase project
+        </li>
+      </ul>
 
     </div>
 
@@ -273,7 +256,12 @@
 
         <h2>How to Use This App</h2>
 
-        <button class="modal-close" (click)="closeInfoModal()" title="Close">✕</button>
+        <div class="modal-header-actions">
+          @if (currentUrl()) {
+          <button type="button" class="url-button" (click)="copyCurrentUrl()" title="Copy URL">Copy URL</button>
+          }
+          <button type="button" class="modal-close" (click)="closeInfoModal()" title="Close">✕</button>
+        </div>
 
       </div>
 
@@ -285,15 +273,15 @@
 
           <ol>
 
-            <li><strong>Select your source language</strong> from the dropdown menu</li>
+            <li><strong>Select your source language</strong> from the dropdown</li>
 
-            <li>The app will <strong>automatically start listening</strong> for that language</li>
+            <li>Click <strong>Start Listening</strong> (it may auto-start after you choose a language)</li>
 
             <li><strong>Speak clearly</strong> into your microphone</li>
 
-            <li>Watch the translation appear in real-time in the English Translation box</li>
+            <li>Watch the English translation appear as speech is finalized</li>
 
-            <li>The app will <strong>continuously listen for 120 seconds</strong> (see countdown timer)</li>
+            <li>Listening stops after <strong>120 seconds without speech</strong> (timer resets when you talk)</li>
 
           </ol>
 
@@ -307,17 +295,15 @@
 
           <ul>
 
-            <li><strong>Continuous Listening:</strong> The app listens continuously for 120 seconds without needing to
+            <li><strong>Continuous listening:</strong> the app restarts between phrases (browser-dependent)</li>
 
-              restart</li>
+            <li><strong>Chunked translation:</strong> speech is translated when it’s finalized (fewer API calls)</li>
 
-            <li><strong>Real-time Translation:</strong> Translations appear as you speak</li>
+            <li><strong>Text-to-speech:</strong> enable <strong>Read aloud</strong> to hear the English translation</li>
 
-            <li><strong>Text-to-Speech:</strong> Check "Read translation aloud" to hear the English translation</li>
+            <li><strong>Manual input:</strong> you can also type text directly into the Original Text box</li>
 
-            <li><strong>Manual Input:</strong> You can also type text directly into the Original Text box</li>
-
-            <li><strong>Auto-save:</strong> Your language preference is saved automatically</li>
+            <li><strong>Auto-save:</strong> your preferences are saved locally</li>
 
           </ul>
 
@@ -349,7 +335,7 @@
 
             <li><strong>Language Match:</strong> Make sure you're speaking in the language you selected</li>
 
-            <li><strong>Audio Feedback:</strong> If "Read translation aloud" is enabled, use headphones or lower speaker
+            <li><strong>Audio Feedback:</strong> If "Read aloud" is enabled, use headphones or lower speaker
 
               volume to prevent the microphone from picking up the English translation</li>
 

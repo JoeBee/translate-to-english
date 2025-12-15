@@ -67,8 +67,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     private storageService: StorageService
   ) { }
 
-  private committedText = '';
-
   // ...
 
   ngOnInit(): void {
@@ -120,7 +118,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
         // Speech input switches us out of manual typing mode
         if (this.manualMode()) {
           this.manualMode.set(false);
-          this.committedText = '';
           this.segments.set([]);
           this.interimOriginal.set('');
           this.interimTranslated.set('');
@@ -276,7 +273,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     this.interimOriginal.set('');
     this.interimTranslated.set('');
     this.originalText.set(text);
-    this.committedText = text;
 
     if (!text || text.trim().length === 0) {
       this.translatedText.set('');
@@ -442,16 +438,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     this.isListening.set(false);
   }
 
-  openCurrentUrlInNewTab(): void {
-    const url = this.currentUrl();
-    if (!url) return;
-    try {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {
-      // ignore
-    }
-  }
-
   async copyCurrentUrl(): Promise<void> {
     const url = this.currentUrl();
     if (!url) return;
@@ -498,7 +484,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
 
   clearText(): void {
     this.originalText.set('');
-    this.committedText = '';
     this.translatedText.set('');
     this.errorMessage.set('');
     this.lastTranslatedText = '';
@@ -739,26 +724,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     el.scrollTop = el.scrollHeight;
   }
 
-  private splitIntoSentences(text: string): string[] {
-    const cleaned = (text || '').replace(/\s+/g, ' ').trim();
-    if (!cleaned) return [];
-
-    // Split on sentence-ending punctuation, preserving the punctuation.
-    const parts: string[] = [];
-    let current = '';
-    for (const ch of cleaned) {
-      current += ch;
-      if (ch === '.' || ch === '!' || ch === '?' || ch === '。' || ch === '！' || ch === '？') {
-        const s = current.trim();
-        if (s) parts.push(s);
-        current = '';
-      }
-    }
-    const tail = current.trim();
-    if (tail) parts.push(tail);
-    return parts.length ? parts : [cleaned];
-  }
-
   private truncateForQuery(text: string, maxChars: number): string {
     const t = (text || '').trim();
     if (t.length <= maxChars) return t;
@@ -767,14 +732,6 @@ export class TranslatorComponent implements OnInit, OnDestroy {
     const lastSpace = slice.lastIndexOf(' ');
     if (lastSpace > maxChars * 0.6) return slice.slice(0, lastSpace).trim();
     return slice.trim();
-  }
-
-  private flattenChunks(parts: string[], maxChars: number): string[] {
-    const out: string[] = [];
-    for (const p of parts) {
-      out.push(...this.chunkText(p, maxChars));
-    }
-    return out;
   }
 
   private packIntoChunks(parts: string[], maxChars: number): string[] {

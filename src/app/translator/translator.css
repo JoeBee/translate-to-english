@@ -74,35 +74,6 @@
   margin: 0;
 }
 
-.url-hint {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.url-label {
-  font-weight: 600;
-  color: #374151;
-}
-
-.url-link {
-  max-width: 80vw;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #2563eb;
-  text-decoration: none;
-}
-
-.url-link:hover {
-  text-decoration: underline;
-}
-
 .url-button {
   padding: 4px 8px;
   border-radius: 6px;
@@ -333,6 +304,12 @@
   align-items: center;
   padding: 24px;
   border-bottom: 2px solid #e5e7eb;
+}
+
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .modal-header h2 {

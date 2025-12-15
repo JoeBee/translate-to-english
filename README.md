@@ -1,16 +1,15 @@
-# Translate to English - Real-time Translation PWA
+# Translate to English (Angular PWA)
 
-A Progressive Web App (PWA) that listens to speech, detects the spoken language, translates to English, and speaks the translation out loud.
+A Progressive Web App that listens to speech, translates **from a selected source language to English**, and can speak the translation out loud.
 
 ## Features
 
-- **Speech Recognition**: Listen to words being spoken using Web Speech API
-- **Language Detection**: Automatically detects the spoken language using Google Cloud Translation API
-- **Real-time Translation**: Translates detected speech to English in real-time
-- **Text-to-Speech**: Speaks the English translation out loud
-- **Language Selection**: Dropdown with 30+ languages including Southeast Asian languages
-- **PWA Support**: Works offline (cached translations) and installable on mobile devices
-- **Local Storage**: User preferences and translation history stored locally
+- **Speech recognition**: Uses the Web Speech API (best in Chrome/Edge)
+- **Real-time-ish translation**: Translates finalized speech in chunks (reduces API calls)
+- **Text-to-speech**: Optional “Read aloud” for the English output
+- **Language selection**: 30+ languages, including Southeast Asian languages
+- **PWA**: Installable; app shell is cached by the service worker
+- **Local storage**: Saves your preferences and a small translation cache/history
 
 ## Supported Languages
 
@@ -26,9 +25,10 @@ Thai, Vietnamese, Indonesian, Malay, Lao, Khmer (Cambodian), Myanmar (Burmese), 
 ## Setup
 
 ### Prerequisites
+
 - Node.js (v20+)
-- Firebase CLI installed
-- Google Cloud Translation API enabled in Firebase project
+- (Optional) Firebase CLI (`npm i -g firebase-tools`) if you want to use emulators or deploy
+- (Optional) Google Cloud Translation API enabled in your Firebase project if using real Functions translation
 
 ### Installation
 
@@ -44,9 +44,11 @@ cd ..
 - Update `src/environments/environment.ts` with your Firebase config
 - Update `src/environments/environment.prod.ts` with production Firebase config
 
-3. Set up Google Cloud Translation API:
-- Enable Translation API in Google Cloud Console
-- The Firebase Functions will use Application Default Credentials
+3. (Optional) Enable Google Cloud Translation API
+
+If you’re deploying and using the real Functions-backed translation:
+
+- Enable **Cloud Translation API** in Google Cloud Console for your Firebase project.
 
 4. Generate PWA icons (optional):
 - The app uses `favicon.ico` as a fallback icon
@@ -58,7 +60,7 @@ cd ..
 npm run build
 ```
 
-6. Deploy to Firebase:
+6. (Optional) Deploy to Firebase:
 ```bash
 firebase deploy --only hosting
 firebase deploy --only functions
@@ -67,16 +69,16 @@ firebase deploy --only functions
 ## Usage
 
 1. Open the app in Chrome or Edge (for best speech recognition support)
-2. Select a source language or leave on "Auto-detect"
-3. Click "Start Listening" to begin speech recognition
+2. Select a **source language**
+3. Click **Start Listening** (or it may auto-start once you select a language)
 4. Speak in any supported language
-5. The app will detect the language, translate to English, and speak the translation
+5. The app will translate to English, and optionally speak the translation if enabled
 
 ## Development
 
-### Running Locally (No Deployment Required!)
+### Running Locally (No Deployment Required)
 
-The app now includes a **mock translation service** for development that works without Firebase Functions or Google Cloud Translation API. This means you can test the app locally with zero errors!
+The app includes a **mock translation mode** for development, so you can run locally without deploying Functions.
 
 **To run in development mode:**
 
@@ -85,9 +87,13 @@ The app now includes a **mock translation service** for development that works w
 npm start
 ```
 
-2. The app will automatically use mock translation service (no errors!)
+2. Ensure `src/environments/environment.ts` has:
 
-**Optional: Use Firebase Emulators (for testing real functions)**
+- `useMockTranslation: true`
+
+Then refresh the page.
+
+### Optional: Use Firebase Emulators (test real Functions locally)
 
 If you want to test with actual Firebase Functions locally:
 
@@ -108,13 +114,17 @@ cd ..
 firebase emulators:start --only functions
 ```
 
-3. The app will automatically connect to the local emulator at `http://localhost:5001`
+3. Configure `src/environments/environment.ts` for emulators:
 
-**To switch between mock and real functions:**
+- `useEmulator: true`
+- `functionsUrl: 'http://localhost:5001/<your-project-id>/us-central1'`
+
+### Switching between mock/emulator/production
 
 Edit `src/environments/environment.ts`:
-- `useMockTranslation: true` - Uses mock service (no API needed, no errors!)
-- `useMockTranslation: false` - Uses Firebase Functions (requires emulator or deployment)
+- `useMockTranslation: true` - Uses mock translation (best for quick local dev)
+- `useMockTranslation: false` - Uses Firebase Functions (requires emulator or deployed Functions)
+- `useEmulator: true|false` - When not mocking, choose emulator vs deployed Functions
 
 Build for production:
 ```bash
@@ -130,14 +140,37 @@ npm run build
 
 ## Firebase Configuration
 
-- **Project ID**: translate-to-english-80cad
-- **Project Number**: 787907356274
 - **Hosting**: Firebase Hosting
 - **Functions**: Firebase Cloud Functions (Node.js 20)
 
 ## API Usage
 
-The app uses Google Cloud Translation API free tier (500K characters/month).
+If you use the real Functions translation, it uses Google Cloud Translation API (see your project’s quotas/billing).
+
+## Deployment (Functions) Troubleshooting
+
+If you see **404**, **CORS**, or **Status 0** errors in the browser console, it usually means the Functions endpoint isn’t reachable (not deployed, wrong URL, or emulator not running).
+
+### Deploy Functions
+
+From the repo root:
+
+```bash
+npm install
+cd functions
+npm install
+npm run build
+cd ..
+firebase deploy --only functions
+```
+
+### Emulator not running
+
+If you’re using the emulator URL and see connection errors, start it:
+
+```bash
+firebase emulators:start --only functions
+```
 
 ## Browser Support
 
